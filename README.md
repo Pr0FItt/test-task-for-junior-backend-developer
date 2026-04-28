@@ -53,3 +53,16 @@ http://localhost:8080/swagger/openapi.json
 - `GET /api/v1/tasks/{id}`
 - `PUT /api/v1/tasks/{id}`
 - `DELETE /api/v1/tasks/{id}`
+
+### Периодичность задач
+
+Для создания и обновления задачи можно передавать поля:
+
+- `recurrence_kind`: `none`, `daily`, `weekly`, `monthly_dates`, `monthly_even_days`, `monthly_odd_days`
+- `recurrence_days`: массив чисел
+
+Правила валидации:
+
+- `none`, `daily`, `monthly_even_days`, `monthly_odd_days` -> `recurrence_days` должен быть пустым
+- `weekly` -> `recurrence_days` обязателен, значения от `1` до `7` (дни недели)
+- `monthly_dates` -> `recurrence_days` обязателен, значения от `1` до `31` (числа месяца)

@@ -3,6 +3,7 @@ package task
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -28,9 +29,11 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 	}
 
 	model := &taskdomain.Task{
-		Title:       normalized.Title,
-		Description: normalized.Description,
-		Status:      normalized.Status,
+		Title:          normalized.Title,
+		Description:    normalized.Description,
+		Status:         normalized.Status,
+		RecurrenceKind: normalized.RecurrenceKind,
+		RecurrenceDays: normalized.RecurrenceDays,
 	}
 	now := s.now()
 	model.CreatedAt = now
@@ -63,11 +66,13 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (*tas
 	}
 
 	model := &taskdomain.Task{
-		ID:          id,
-		Title:       normalized.Title,
-		Description: normalized.Description,
-		Status:      normalized.Status,
-		UpdatedAt:   s.now(),
+		ID:             id,
+		Title:          normalized.Title,
+		Description:    normalized.Description,
+		Status:         normalized.Status,
+		RecurrenceKind: normalized.RecurrenceKind,
+		RecurrenceDays: normalized.RecurrenceDays,
+		UpdatedAt:      s.now(),
 	}
 
 	updated, err := s.repo.Update(ctx, model)
@@ -106,6 +111,16 @@ func validateCreateInput(input CreateInput) (CreateInput, error) {
 		return CreateInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
 	}
 
+	if input.RecurrenceKind == "" {
+		input.RecurrenceKind = taskdomain.RecurrenceNone
+	}
+
+	recurrenceDays, err := normalizeRecurrence(input.RecurrenceKind, input.RecurrenceDays)
+	if err != nil {
+		return CreateInput{}, err
+	}
+	input.RecurrenceDays = recurrenceDays
+
 	return input, nil
 }
 
@@ -121,5 +136,76 @@ func validateUpdateInput(input UpdateInput) (UpdateInput, error) {
 		return UpdateInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
 	}
 
+	if input.RecurrenceKind == "" {
+		input.RecurrenceKind = taskdomain.RecurrenceNone
+	}
+
+	recurrenceDays, err := normalizeRecurrence(input.RecurrenceKind, input.RecurrenceDays)
+	if err != nil {
+		return UpdateInput{}, err
+	}
+	input.RecurrenceDays = recurrenceDays
+
 	return input, nil
+}
+
+func normalizeRecurrence(kind taskdomain.RecurrenceKind, days []int) ([]int, error) {
+	if !kind.Valid() {
+		return nil, fmt.Errorf("%w: invalid recurrence kind", ErrInvalidInput)
+	}
+
+	normalizedDays := uniqueSortedDays(days)
+
+	switch kind {
+	case taskdomain.RecurrenceNone, taskdomain.RecurrenceDaily, taskdomain.RecurrenceMonthlyEvenDays, taskdomain.RecurrenceMonthlyOddDays:
+		if len(normalizedDays) > 0 {
+			return nil, fmt.Errorf("%w: recurrence_days must be empty for recurrence kind %s", ErrInvalidInput, kind)
+		}
+
+		return nil, nil
+	case taskdomain.RecurrenceWeekly:
+		if len(normalizedDays) == 0 {
+			return nil, fmt.Errorf("%w: recurrence_days is required for weekly recurrence", ErrInvalidInput)
+		}
+
+		for _, day := range normalizedDays {
+			if day < 1 || day > 7 {
+				return nil, fmt.Errorf("%w: weekly recurrence_days must be in range 1..7", ErrInvalidInput)
+			}
+		}
+
+		return normalizedDays, nil
+	case taskdomain.RecurrenceMonthlyDates:
+		if len(normalizedDays) == 0 {
+			return nil, fmt.Errorf("%w: recurrence_days is required for monthly_dates recurrence", ErrInvalidInput)
+		}
+
+		for _, day := range normalizedDays {
+			if day < 1 || day > 31 {
+				return nil, fmt.Errorf("%w: monthly_dates recurrence_days must be in range 1..31", ErrInvalidInput)
+			}
+		}
+
+		return normalizedDays, nil
+	default:
+		return nil, fmt.Errorf("%w: invalid recurrence kind", ErrInvalidInput)
+	}
+}
+
+func uniqueSortedDays(days []int) []int {
+	if len(days) == 0 {
+		return nil
+	}
+
+	uniqueDays := make([]int, 0, len(days))
+	for _, day := range days {
+		if slices.Contains(uniqueDays, day) {
+			continue
+		}
+
+		uniqueDays = append(uniqueDays, day)
+	}
+
+	slices.Sort(uniqueDays)
+	return uniqueDays
 }

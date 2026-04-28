@@ -20,12 +20,22 @@ func New(pool *pgxpool.Pool) *Repository {
 
 func (r *Repository) Create(ctx context.Context, task *taskdomain.Task) (*taskdomain.Task, error) {
 	const query = `
-		INSERT INTO tasks (title, description, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, title, description, status, created_at, updated_at
+		INSERT INTO tasks (title, description, status, recurrence_kind, recurrence_days, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, title, description, status, recurrence_kind, recurrence_days, created_at, updated_at
 	`
 
-	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, task.CreatedAt, task.UpdatedAt)
+	row := r.pool.QueryRow(
+		ctx,
+		query,
+		task.Title,
+		task.Description,
+		task.Status,
+		task.RecurrenceKind,
+		intSliceToInt32Slice(task.RecurrenceDays),
+		task.CreatedAt,
+		task.UpdatedAt,
+	)
 	created, err := scanTask(row)
 	if err != nil {
 		return nil, err
@@ -36,7 +46,7 @@ func (r *Repository) Create(ctx context.Context, task *taskdomain.Task) (*taskdo
 
 func (r *Repository) GetByID(ctx context.Context, id int64) (*taskdomain.Task, error) {
 	const query = `
-		SELECT id, title, description, status, created_at, updated_at
+		SELECT id, title, description, status, recurrence_kind, recurrence_days, created_at, updated_at
 		FROM tasks
 		WHERE id = $1
 	`
@@ -60,12 +70,24 @@ func (r *Repository) Update(ctx context.Context, task *taskdomain.Task) (*taskdo
 		SET title = $1,
 			description = $2,
 			status = $3,
-			updated_at = $4
-		WHERE id = $5
-		RETURNING id, title, description, status, created_at, updated_at
+			recurrence_kind = $4,
+			recurrence_days = $5,
+			updated_at = $6
+		WHERE id = $7
+		RETURNING id, title, description, status, recurrence_kind, recurrence_days, created_at, updated_at
 	`
 
-	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, task.UpdatedAt, task.ID)
+	row := r.pool.QueryRow(
+		ctx,
+		query,
+		task.Title,
+		task.Description,
+		task.Status,
+		task.RecurrenceKind,
+		intSliceToInt32Slice(task.RecurrenceDays),
+		task.UpdatedAt,
+		task.ID,
+	)
 	updated, err := scanTask(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -95,7 +117,7 @@ func (r *Repository) Delete(ctx context.Context, id int64) error {
 
 func (r *Repository) List(ctx context.Context) ([]taskdomain.Task, error) {
 	const query = `
-		SELECT id, title, description, status, created_at, updated_at
+		SELECT id, title, description, status, recurrence_kind, recurrence_days, created_at, updated_at
 		FROM tasks
 		ORDER BY id DESC
 	`
@@ -129,8 +151,10 @@ type taskScanner interface {
 
 func scanTask(scanner taskScanner) (*taskdomain.Task, error) {
 	var (
-		task   taskdomain.Task
-		status string
+		task           taskdomain.Task
+		status         string
+		recurrenceKind string
+		recurrenceDays []int32
 	)
 
 	if err := scanner.Scan(
@@ -138,6 +162,8 @@ func scanTask(scanner taskScanner) (*taskdomain.Task, error) {
 		&task.Title,
 		&task.Description,
 		&status,
+		&recurrenceKind,
+		&recurrenceDays,
 		&task.CreatedAt,
 		&task.UpdatedAt,
 	); err != nil {
@@ -145,6 +171,34 @@ func scanTask(scanner taskScanner) (*taskdomain.Task, error) {
 	}
 
 	task.Status = taskdomain.Status(status)
+	task.RecurrenceKind = taskdomain.RecurrenceKind(recurrenceKind)
+	task.RecurrenceDays = int32SliceToIntSlice(recurrenceDays)
 
 	return &task, nil
+}
+
+func intSliceToInt32Slice(values []int) []int32 {
+	if len(values) == 0 {
+		return nil
+	}
+
+	converted := make([]int32, 0, len(values))
+	for _, v := range values {
+		converted = append(converted, int32(v))
+	}
+
+	return converted
+}
+
+func int32SliceToIntSlice(values []int32) []int {
+	if len(values) == 0 {
+		return nil
+	}
+
+	converted := make([]int, 0, len(values))
+	for _, v := range values {
+		converted = append(converted, int(v))
+	}
+
+	return converted
 }

@@ -169,6 +169,16 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "new"
+          },
+          "recurrence_kind": {
+            "type": "string",
+            "enum": ["none", "daily", "weekly", "monthly_dates", "monthly_even_days", "monthly_odd_days"],
+            "example": "weekly"
+          },
+          "recurrence_days": {
+            "type": "array",
+            "items": { "type": "integer", "minimum": 1, "maximum": 31 },
+            "example": [1, 3, 5]
           }
         }
       },
@@ -188,6 +198,16 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "in_progress"
+          },
+          "recurrence_kind": {
+            "type": "string",
+            "enum": ["none", "daily", "weekly", "monthly_dates", "monthly_even_days", "monthly_odd_days"],
+            "example": "monthly_dates"
+          },
+          "recurrence_days": {
+            "type": "array",
+            "items": { "type": "integer", "minimum": 1, "maximum": 31 },
+            "example": [1, 15, 30]
           }
         }
       },
@@ -204,6 +224,16 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "new"
+          },
+          "recurrence_kind": {
+            "type": "string",
+            "enum": ["none", "daily", "weekly", "monthly_dates", "monthly_even_days", "monthly_odd_days"],
+            "example": "daily"
+          },
+          "recurrence_days": {
+            "type": "array",
+            "items": { "type": "integer", "minimum": 1, "maximum": 31 },
+            "example": []
           },
           "created_at": {
             "type": "string",
